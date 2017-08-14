@@ -1,0 +1,2 @@
+FROM mongo:3.4.2
+User mongodb

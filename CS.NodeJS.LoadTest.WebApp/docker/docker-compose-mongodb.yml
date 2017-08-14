@@ -1,0 +1,51 @@
+version: '2'
+
+services:
+
+  #MONGODB
+  database:
+    build:
+      context: .
+      dockerfile: Dockerfile-Mongo
+
+    image: loadtest-mongo-3.4.2
+    container_name: loadtest-mongo-container
+   
+    volumes:
+      - ../../database/mongo/data:/data/db
+
+  webapi:
+    build:
+      context: .
+      dockerfile: Dockerfile-LoadTest
+      
+    image: loadtest-nodejs
+    container_name: loadtest-nodejs-container
+
+    environment:
+      - NODE_ENV=staging
+
+    links:
+      - database
+
+    expose:
+
+      - "5051"
+      
+  proxy:
+    build:
+      context: .
+      dockerfile: Dockerfile-Nginx-Proxy
+    
+    image: loadtest-nginx-proxy-nodejs
+    container_name: loadtest-nginx-proxy-nodejs-container
+       
+    ports:
+      - "8081:8081"
+
+    links:
+      - webapi
+
+    privileged: true
+
+    command: bash -c "echo '1024 65535' > /proc/sys/net/ipv4/ip_local_port_range && echo '1024' > /proc/sys/net/core/somaxconn && service nginx start"
