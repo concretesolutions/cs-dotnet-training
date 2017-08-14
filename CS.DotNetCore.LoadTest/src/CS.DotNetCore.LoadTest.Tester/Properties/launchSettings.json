@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "CS.DotNetCore.LoadTest.Tester": {
+      "commandName": "Project",
+      "commandLineArgs": "-h=localhost -p=80 -tc=120 -lg=dotnet -id=TMG -ss=60"
+    }
+  }
+}

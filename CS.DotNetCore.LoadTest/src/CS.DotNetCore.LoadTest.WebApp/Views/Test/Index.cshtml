@@ -1,0 +1,427 @@
+@{
+    Layout = "_Layout";
+    var testeIdCollection = (string[])ViewData["TestIdCollection"];
+}
+<style type="text/css">
+  .actionButton {
+    margin-top: 19px;
+  }
+</style>
+<script type="text/javascript">
+
+  /// <reference path="https://code.jquery.com/jquery-3.1.1.min.js">;
+  /// <reference path="https://cdnjs.cloudflare.com/ajax/libs/d3/4.4.0/d3.js">;
+  /// <reference path="https://www.gstatic.com/charts/loader.js">;
+  google.charts.load('current', { packages: ['corechart'] });
+
+  let sltTest = 'sltTest';
+  let selectedTest = sltTest + ' option:selected';
+
+  let btnClearIdentities = 'btnClearIdentities';
+  let btnClearTests = 'btnClearTests';
+  let btnFlushTests = 'btnFlushTests';
+
+  function consoleLogError(err) {
+    console.log(err);
+  }
+
+  function getTestResultAsync(testId) {
+    return new Promise(function(resolve, reject) {
+
+      $.ajax({
+        url: encodeURI('/api/v1/test/' + testId)
+      })
+      .done(function(testResult) {
+
+        resolve(testResult);
+      })
+      .fail(function(jqXHR, textStatus, errorThrown) {
+
+        reject(new Error(textStatus));
+      })
+    });
+  }
+
+  function deleteIdentitiesMemoryAsync() {
+    return new Promise(function(resolve, reject) {
+
+      $.ajax({
+        url: 'api/v1/identity/all/memory',
+        method: 'DELETE'
+      })
+     .done(() => { resolve(); })
+     .fail(function(jqXHR, textStatus, errorThrown) {
+
+       reject(new Error(textStatus));
+     });
+    });
+  }
+
+  function deleteIdentitiesDbAsync() {
+    return new Promise(function(resolve, reject) {
+
+      $.ajax({
+        url: 'api/v1/identity/all/db',
+        method: 'DELETE'
+      })
+     .done(() => { resolve(); })
+     .fail(function(jqXHR, textStatus, errorThrown) {
+
+       reject(new Error(textStatus));
+     });
+    });
+  }
+
+  function deleteIdentitiesAsync() {
+    return new Promise(function(resolve, reject) {
+
+      deleteIdentitiesMemoryAsync()
+        .then(() => {
+
+          deleteIdentitiesDbAsync()
+            .then(() => {
+              resolve();
+            })
+            .catch(err => {
+              reject(err);
+            });
+        })
+        .catch((err) => {
+          reject(err);
+        })
+    });
+  }
+
+  function deleteEventResultMemoryAsync() {
+    return new Promise(function(resolve, reject) {
+      $.ajax({
+        url: 'api/v1/event_result/all',
+        method: 'DELETE'
+      })
+      .done(function() {
+        resolve();
+      })
+      .fail(function(jqXHR, textStatus, errorThrown) {
+        reject(new Error(textStatus));
+      });
+    });
+  }
+
+  function deleteTestResultAsync() {
+    return new Promise(function(resolve, reject) {
+      $.ajax({
+        url: 'api/v1/test/all',
+        method: 'DELETE'
+      })
+      .done(function() {
+        resolve();
+      })
+      .fail(function(jqXHR, textStatus, errorThrown) {
+        reject(new Error(textStatus));
+      });
+    });
+  }
+
+  function deleteTestsAsync() {
+    return new Promise(function(resolve, reject) {
+
+      deleteEventResultMemoryAsync()
+        .then(() => {
+
+          deleteTestResultAsync()
+            .then(resolve)
+            .catch(reject);
+
+        })
+        .catch(reject)
+    });
+  }
+
+  function compileTestResult() {
+    return new Promise(function(resolve, reject) {
+
+      $.ajax({
+        url: 'api/v1/test/all/event_result',
+        method: 'POST'
+      })
+      .done(function() {
+
+        deleteEventResultMemoryAsync()
+          .then(resolve)
+          .catch(reject);
+      })
+      .fail(function(jqXHR, textStatus, errorThrown) {
+        reject(new Error(textStatus));
+      })
+    });
+  }
+
+  function createEventClusterResponse(clusterDateTime) {
+
+    return {
+      metrics: {
+        successCount: 0,
+        errorCount: 0,
+        ElapsedTimeAvg: 0.0
+      },
+      clusterDateTime: clusterDateTime
+    }
+  }
+
+  function sortSuperClusterAction(c1, c2) {
+
+    if (c1.clusterDateTime.getTime() > c2.clusterDateTime.getTime())
+      return 1;
+
+    if (c1.clusterDateTime.getTime() < c2.clusterDateTime.getTime())
+      return -1
+
+    return 0;
+  }
+
+  function renderChartAsync(testResult, options) {
+
+    return new Promise((resolve, reject) => {
+
+      if (!testResult || !testResult.languages || testResult.languages.length < 1) {
+
+        resolve();
+        return;
+      }
+
+      ////setting chart objects
+      let dataArray = [['Second']];
+
+      let chartOptions = options.chartOptions;
+      chartOptions.series = {};
+
+      let seriesIndex = 0;
+      let xAxisLength = -1;
+
+      testResult.languages.forEach((languageResponse) => {
+
+        //setting languages in dataArray and in chart label
+        dataArray[0].push(languageResponse.testLanguage);
+
+        chartOptions.series[seriesIndex.toString()] = {
+          labelInLegend: options.getLabelInLegend(languageResponse)
+        };
+
+        seriesIndex++;
+
+        //sorting clusters by clustDateTime and fixing decimal places for elapsedtime
+        languageResponse.metrics.elapsedTimeAvg = parseFloat(languageResponse.metrics.elapsedTimeAvg.toFixed(4));
+
+        languageResponse.eventSuperCluster.forEach((cluster) => {
+
+          cluster.clusterDateTime = new Date(cluster.clusterDateTime);
+          cluster.metrics.elapsedTimeAvg = parseFloat(cluster.metrics.elapsedTimeAvg.toFixed(4));
+        })
+
+        languageResponse.eventSuperCluster = languageResponse.eventSuperCluster.sort(sortSuperClusterAction);
+
+        //filling senconds gaps in super cluster
+        for (let i = 0; i < (languageResponse.eventSuperCluster.length - 1) ; i++) {
+
+          let currentCluster = languageResponse.eventSuperCluster[i];
+          let nextCluster = languageResponse.eventSuperCluster[i + 1];
+
+          if (nextCluster.clusterDateTime.getTime() - currentCluster.clusterDateTime.getTime() > 1000) {
+
+            let emptyClusterMetrics = createEventClusterResponse(new Date(currentCluster.clusterDateTime.getTime() + 1000));
+            languageResponse.eventSuperCluster.push(emptyClusterMetrics);
+
+            languageResponse.eventSuperCluster.sort(sortSuperClusterAction);
+            i--;
+          }
+        }
+
+        //resolving biggest xAxis length
+        if (languageResponse.eventSuperCluster.length > xAxisLength) {
+
+          xAxisLength = languageResponse.eventSuperCluster.length;
+        }
+      });
+
+      //settting origin dot for each languages
+      dataArray[1] = [0];
+
+      testResult.languages.forEach((languageResponse) => {
+
+        dataArray[1].push(0);
+      });
+
+      //loadind data for each language
+      testResult.languages.forEach((languageResponse) => {
+
+        for (var i = 0; i < xAxisLength; i++) {
+
+          let cluster = languageResponse.eventSuperCluster[i];
+
+          //(i + 2) is to jump header and origin dot | (i + 1) is the Second {x axis value}
+          if (!dataArray[i + 2]) {
+
+            dataArray[i + 2] = [(i + 1).toString()];
+          }
+
+          dataArray[i + 2].push(cluster ? options.compileMetrics(cluster.metrics) : 0);
+        }
+      });
+
+      //rendering
+      let chartData = google.visualization.arrayToDataTable(dataArray);
+      let chart = new google.visualization.LineChart(options.chartContainer)
+
+      chart.draw(chartData, chartOptions);
+    });
+  }
+
+  function sltTestOnChangeHandler() {
+
+    let testId = $('#' + selectedTest).val();
+
+    let resolveHandler = function(testResult) {
+
+      let chartOptions = {
+        hAxis: { title: 'Second' },
+        colors: ['steelblue', 'orange'],
+        height: 500,
+
+        legend: {
+          position: 'top',
+          alignment: 'center'
+        }
+      };
+
+      let countChartOptions = {
+        chartOptions: $.extend(true, {}, chartOptions),
+
+        getLabelInLegend: function(lgResp) {
+          return lgResp.testLanguage + ' (Total: ' + (lgResp.metrics.successCount + lgResp.metrics.errorCount).toLocaleString('en-US') + ' )';
+        },
+
+        compileMetrics: function(metrics) {
+          return metrics.successCount + metrics.errorCount;
+        },
+
+        chartContainer: document.getElementById('dvChartCount')
+      };
+
+      countChartOptions.chartOptions.vAxis = { title: 'Request Count' };
+      countChartOptions.chartOptions.title = 'Count Of Handled Requests';
+
+      let timeChartOptions = {
+        chartOptions: $.extend(true, {}, chartOptions),
+
+        getLabelInLegend: function(lgResp) {
+          return lgResp.testLanguage + ' (Avg: ' + lgResp.metrics.elapsedTimeAvg.toString() + ' )';
+        },
+
+        compileMetrics: function(metrics) {
+          return metrics.elapsedTimeAvg;
+        },
+
+        chartContainer: document.getElementById('dvChartTime')
+      };
+
+      timeChartOptions.chartOptions.vAxis = { title: 'Request Time Avg (ms)' };
+      timeChartOptions.chartOptions.title = 'Request Handling Time';
+
+      renderChartAsync(testResult, countChartOptions)
+        .then(function() { console.log('chart count ok...') })
+        .catch(function(err) { console.log(err); });
+
+      renderChartAsync(testResult, timeChartOptions)
+       .then(function() { console.log('chart time ok...') })
+       .catch(function(err) { console.log(err); });
+    };
+
+    getTestResultAsync(testId)
+      .then(resolveHandler, consoleLogError)
+      .catch(consoleLogError);
+  }
+
+  function resetActionBtn(btn, value) {
+
+    btn.prop('disabled', false);
+    btn.text(value);
+  };
+
+  function btnActionClickHanlderAsync(btnId, asyncAction) {
+    return new Promise(function(resolve, reject) {
+
+      let btn = $('#' + btnId);
+      let btnVal = btn.text();
+
+      btn.text('Running...');
+      btn.prop('disabled', true);
+
+      asyncAction()
+        .then(() => {
+          resetActionBtn(btn, btnVal);
+          resolve();
+        })
+        .catch(err => {
+          console.log(err);
+          resetActionBtn(btn, btnVal);
+          reject(err);
+        });
+    })
+  }
+
+  $(document).ready(function() {
+
+    $('#' + sltTest).change(sltTestOnChangeHandler);
+    $('#' + btnClearIdentities).click(function() { btnActionClickHanlderAsync(btnClearIdentities, deleteIdentitiesAsync); });
+
+    $('#' + btnClearTests).click(function() {
+      btnActionClickHanlderAsync(btnClearTests, deleteTestsAsync)
+        .then(() => {
+          location.reload();
+        })
+    });
+
+    $('#' + btnFlushTests).click(function() {
+      btnActionClickHanlderAsync(btnFlushTests, compileTestResult)
+        .then(() => {
+          location.reload();
+        })
+    });
+  });
+</script>
+<div class="row">
+  <div class="panel panel-info">
+    <div class="panel-heading">
+      <h3 class="panel-title">Test Results</h3>
+    </div>
+    <div class="col-xs-2">
+      <div class="form-group" style="padding-top:20px">
+        <label>Test:</label>
+        <select id="sltTest">
+          <option value="none">Select Test</option>
+          @{
+              foreach (var testeId in testeIdCollection)
+              {
+                  <option value="@testeId">@testeId</option>
+              }
+          }
+        </select>
+      </div>
+    </div>
+    <div class="col-xs-10">
+      <button id="btnClearIdentities" class="actionButton">Clear Identities</button>
+      <button id="btnClearTests" class="actionButton">Clear Tests</button>
+      <button id="btnFlushTests" class="actionButton">Flush Tests To DB</button>
+    </div>
+    <div class="col-xs-12" style="margin-top:10px">
+      <div class="form-group">
+        <div id="dvChartCount"> </div>
+      </div>
+    </div>
+    <div class="col-xs-12">
+      <div class="form-group">
+        <div id="dvChartTime"> </div>
+      </div>
+    </div>
+  </div>
+</div>

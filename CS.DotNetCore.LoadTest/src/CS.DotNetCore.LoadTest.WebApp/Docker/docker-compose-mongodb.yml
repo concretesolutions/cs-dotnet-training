@@ -1,0 +1,47 @@
+version: '2'
+
+services:
+
+  #MONGODB
+  database:
+    build:
+      context: .
+      dockerfile: Dockerfile-Mongo
+
+    image: loadtest-mongo-3.4.2
+    container_name: loadtest-mongo-container
+   
+    volumes:
+      - ../../database/mongo/data:/data/db
+    
+  webapi:
+    build:
+      context: .
+      dockerfile: Dockerfile-LoadTest
+      
+    image: loadtest-dotnet
+    container_name: loadtest-dotnet-container
+
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Staging
+
+    links:
+      - database
+
+  proxy:
+    build:
+      context: .
+      dockerfile: Dockerfile-Nginx-Proxy
+
+    image: loadtest-nginx-proxy-dotnet
+    container_name: loadtest-nginx-proxy-dotnet-container
+
+    ports:
+      - "80:80"
+
+    links:
+      - webapi
+
+    privileged: true
+
+    command: bash -c "echo '1024 65535' > /proc/sys/net/ipv4/ip_local_port_range && echo '1024' > /proc/sys/net/core/somaxconn && service nginx start"
