@@ -268,5 +268,5 @@ GeneratedArtifacts/
 _Pvt_Extensions/
 ModelManifest.xml
 
-#Secrets Folder
-[Ss]ecrets/
+#NETCORE
+**/Properties/[Ll]aunchSettings.json
