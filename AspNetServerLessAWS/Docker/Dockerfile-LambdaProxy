@@ -1,0 +1,4 @@
+FROM microsoft/aspnetcore:2.0.6-stretch
+WORKDIR /home/ubuntu/aspnet-lambda-proxy
+COPY ./webapp .
+ENTRYPOINT ["dotnet", "ASPNetLambdaProxy.dll"]

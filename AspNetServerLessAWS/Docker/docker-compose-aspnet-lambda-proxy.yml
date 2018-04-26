@@ -1,0 +1,34 @@
+version: '2'
+
+services:
+    
+  aspnet-lambda-proxy:
+    build:
+      context: .
+      dockerfile: Dockerfile-LambdaProxy
+      
+    image: aspnet-lambda-proxy-img
+    container_name: aspnet-lambda-proxy-container
+
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Staging
+      - APP_SECRET_IV=XXX
+      - APP_SECRET_KEY=XXX
+
+  proxy:
+    build:
+      context: .
+      dockerfile: Dockerfile-Nginx
+
+    image: nginx-kestrel-proxy-img
+    container_name: nginx-kestrel-proxy-container
+
+    ports:
+      - "8083:8083"
+
+    links:
+      - aspnet-lambda-proxy
+
+    privileged: true
+
+    command: bash -c "echo '1024 65535' > /proc/sys/net/ipv4/ip_local_port_range && echo '1024' > /proc/sys/net/core/somaxconn && service nginx start"

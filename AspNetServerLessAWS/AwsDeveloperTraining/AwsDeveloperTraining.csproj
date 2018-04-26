@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>netcoreapp2.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Remove="SampleData\S3\create-file-exercise.bundle.css" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="SampleData\S3\create-file-exercise.bundle.css">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="wwwroot\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <DotNetCliToolReference Include="Microsoft.VisualStudio.Web.CodeGeneration.Tools" Version="2.0.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Amazon.Lambda.AspNetCoreServer" Version="2.0.1" />
+    <PackageReference Include="AWSSDK.Extensions.NETCore.Setup" Version="3.3.4" />
+    <PackageReference Include="AWSSDK.S3" Version="3.3.16.2" />
+    <PackageReference Include="Microsoft.AspNetCore.All" Version="2.0.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AWSDeveloperTraining.Practices\AWSDeveloperTraining.Practices.csproj" />
+    <ProjectReference Include="..\AwsDeveloperTraining.ServiceModel\AwsDeveloperTraining.ServiceModel.csproj" />
+    <ProjectReference Include="..\AWSPractices\AWSPractices.csproj" />
+  </ItemGroup>
+
+</Project>
